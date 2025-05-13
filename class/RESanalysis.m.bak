@@ -1,0 +1,485 @@
+classdef RESanalysis < handle
+    %% Todo
+    % Bereiche loschen
+    % Indikatoren Ueberlappung/FitQuali
+    % Integrale mit Signal nicht Modell
+    %
+    
+    %% Version
+    % v0.3.0
+    % delete single peak/ranges
+    % peak eval for overlap and fit
+    
+    
+    % v0.2.0
+    % added peaktable, spec/peak plot, selection in table
+    % added save and export
+    
+    
+    % v0.1.0
+    % initial build
+    
+    
+    % Properties that correspond to app components
+    properties (Access = public)
+        ver ='0.3.0'
+        
+        mainfig         matlab.ui.Figure
+        mainaxes        
+        peaktable       matlab.ui.control.Table
+        tabGroup        matlab.ui.container.TabGroup
+        tabAdd          matlab.ui.container.Tab
+        tabMod          matlab.ui.container.Tab
+        tabRem          matlab.ui.container.Tab
+        tabSav          matlab.ui.container.Tab
+        tabFil          matlab.ui.container.Tab
+        
+        ModEditPosL     matlab.ui.control.Label
+        ModEditPos      matlab.ui.control.EditField
+        ModEditHeiL     matlab.ui.control.Label
+        ModEditHei      matlab.ui.control.EditField
+        ModEditSiLL     matlab.ui.control.Label
+        ModEditSiL      matlab.ui.control.EditField
+        ModEditSiRL     matlab.ui.control.Label
+        ModEditSiR      matlab.ui.control.EditField
+        ModEditLaLL     matlab.ui.control.Label
+        ModEditLaL      matlab.ui.control.EditField
+        ModEditLaRL     matlab.ui.control.Label
+        ModEditLaR      matlab.ui.control.EditField
+        ModButZoo       matlab.ui.control.Button
+        ModButReset     matlab.ui.control.Button
+        ModButSing      matlab.ui.control.StateButton
+        
+        SavButSav       matlab.ui.control.Button
+        SavButExp       matlab.ui.control.Button
+        SavButSaE       matlab.ui.control.Button
+        
+        RemLabIdx       matlab.ui.control.Label
+        RemLabPos       matlab.ui.control.Label
+        RemLabInt       matlab.ui.control.Label
+        RemLabIdx2      matlab.ui.control.Label
+        RemLabPos2      matlab.ui.control.Label
+        RemLabInt2      matlab.ui.control.Label
+        RemButZoo       matlab.ui.control.Button
+        RemButDel       matlab.ui.control.Button
+        RemButReset     matlab.ui.control.Button
+        
+        AddLabSelWin    
+        AddLabSelWin2   matlab.ui.control.Label
+        AddSpiWinSta    matlab.ui.control.Spinner
+        AddSpiWinEnd    matlab.ui.control.Spinner
+        AddButCfBL      matlab.ui.control.StateButton
+        AddButAccept    matlab.ui.control.Button
+    end
+    
+    
+    properties (Access = public)
+        ga              GCanalysis
+        hPeak
+        hSpec
+        hMod
+        currentSel = 0;
+        evalOver
+        evalFit
+        
+        target
+        tarcol=[0.7 0.7 1];
+        tarplot
+        
+        activetarget=-1;
+        activeplot=-1;
+    end
+    
+    % Component initialization
+    methods (Access = private)
+        
+        % Create figure and components
+        function createComponents(obj)
+            %% 1st layer elements
+            % Create UIFigure and hide until all components are created
+            obj.mainfig = uifigure('Visible', 'on');
+            obj.mainfig.Position = [100 100 1400 800];
+            obj.mainfig.Name = ['GCanalysis - Peak Postprocessing v' obj.ver];
+            obj.mainfig.MenuBar='none';
+            obj.mainfig.ToolBar='none';
+            
+            obj.mainaxes = axes('parent',obj.mainfig,'units','pixel');
+            title(obj.mainaxes, [])
+            xlabel(obj.mainaxes, 'Retentionszeit')
+            ylabel(obj.mainaxes, 'Intensitaet')
+            obj.mainaxes.Position = [430 60 940 540];
+%             obj.mainaxes.Toolbar = [];
+%             obj.mainaxes.Interactions = [zoomInteraction regionZoomInteraction rulerPanInteraction];
+            
+
+            obj.peaktable = uitable(obj.mainfig);
+            obj.peaktable.ColumnName = {'#'; 'Position'; 'Integral';'Ueberlap.';'Fit'};
+            obj.peaktable.ColumnWidth = {30 'auto' 'auto' 60 60};
+            obj.peaktable.RowName = {};
+            obj.peaktable.Position = [30 30 330 570];
+            obj.peaktable.CellSelectionCallback={@cb_table,obj};
+            obj.peaktable.CellEditCallback={@cb_table,obj};
+            %obj.peaktable.ColumnSortable = [true true true true true];
+            
+            % Create TabGroup
+            obj.tabGroup = uitabgroup(obj.mainfig);
+            obj.tabGroup.Position = [30 630 1340 150];
+            
+            % Create Tabs
+            obj.tabAdd = uitab(obj.tabGroup);
+            obj.tabAdd.Title = 'Hinzufuegen';
+            
+            obj.tabMod = uitab(obj.tabGroup);
+            obj.tabMod.Title = 'Modifizieren';
+            
+            obj.tabRem = uitab(obj.tabGroup);
+            obj.tabRem.Title = 'Entfernen';
+            
+            obj.tabFil = uitab(obj.tabGroup);
+            obj.tabFil.Title = 'Peakfilter';
+            
+            obj.tabSav = uitab(obj.tabGroup);
+            obj.tabSav.Title = 'Speichern/Export';
+            
+            %% 2nd layer elements - Add tab
+            
+            obj.AddLabSelWin = uilabel(obj.tabAdd);
+            obj.AddLabSelWin.HorizontalAlignment = 'right';
+            obj.AddLabSelWin.Position = [20 90 100 20];
+            obj.AddLabSelWin.Text = 'Peakbereich von';
+            
+            obj.AddLabSelWin2 = uilabel(obj.tabAdd);
+            obj.AddLabSelWin2.HorizontalAlignment = 'center';
+            obj.AddLabSelWin2.Position = [210 90 30 20];
+            obj.AddLabSelWin2.Text = 'bis';
+            
+            obj.AddSpiWinSta = uispinner(obj.tabAdd);
+            obj.AddSpiWinSta.Position = [130 90 70 20];
+            
+            obj.AddSpiWinEnd = uispinner(obj.tabAdd);
+            obj.AddSpiWinEnd.Position = [250 90 70 20];
+            
+            obj.AddButCfBL = uibutton(obj.tabAdd, 'state');
+            obj.AddButCfBL.Position = [20 50 150 20];
+            obj.AddButCfBL.Text = 'Grundlinie anpassen';
+            
+            obj.AddButAccept = uibutton(obj.tabAdd, 'push');
+            obj.AddButAccept.Position = [20 10 150 20];
+            obj.AddButAccept.Text = 'Peak hinzufuegen';
+            
+            
+            %% 2nd layer elements - Mod tab
+            % Mod tab - Position
+            obj.ModEditPosL = uilabel(obj.tabMod);
+            obj.ModEditPosL.HorizontalAlignment = 'right';
+            obj.ModEditPosL.Position = [20 90 50 20];
+            obj.ModEditPosL.Text = 'Position';
+            
+            obj.ModEditPos = uieditfield(obj.tabMod, 'text');
+            obj.ModEditPos.Position = [75 90 100 20];
+            
+            % Mod tab - Height
+            obj.ModEditHeiL = uilabel(obj.tabMod);
+            obj.ModEditHeiL.HorizontalAlignment = 'right';
+            obj.ModEditHeiL.Position = [20+180 90 50 20];
+            obj.ModEditHeiL.Text = 'Height';
+            
+            obj.ModEditHei = uieditfield(obj.tabMod, 'text');
+            obj.ModEditHei.Position = [75+180 90 100 20];
+            
+            % Mod tab - sigmaL
+            obj.ModEditSiLL = uilabel(obj.tabMod);
+            obj.ModEditSiLL.HorizontalAlignment = 'right';
+            obj.ModEditSiLL.Position = [20 50 50 20];
+            obj.ModEditSiLL.Text = 'Sigma L';
+            
+            obj.ModEditSiL = uieditfield(obj.tabMod, 'text');
+            obj.ModEditSiL.Position = [75 50 100 20];
+            
+            % Mod tab - sigmaR
+            obj.ModEditSiRL = uilabel(obj.tabMod);
+            obj.ModEditSiRL.HorizontalAlignment = 'right';
+            obj.ModEditSiRL.Position = [20+180 50 50 20];
+            obj.ModEditSiRL.Text = 'Sigma R';
+            
+            obj.ModEditSiR = uieditfield(obj.tabMod, 'text');
+            obj.ModEditSiR.Position = [75+180 50 100 20];
+            
+            % Mod tab - Linearity L
+            obj.ModEditLaLL = uilabel(obj.tabMod);
+            obj.ModEditLaLL.HorizontalAlignment = 'right';
+            obj.ModEditLaLL.Position = [20 10 50 20];
+            obj.ModEditLaLL.Text = 'Sigma L';
+            
+            obj.ModEditLaL = uieditfield(obj.tabMod, 'text');
+            obj.ModEditLaL.Position = [75 10 100 20];
+            
+            % Mod tab - Linearity R
+            obj.ModEditLaRL = uilabel(obj.tabMod);
+            obj.ModEditLaRL.HorizontalAlignment = 'right';
+            obj.ModEditLaRL.Position = [20+180 10 50 20];
+            obj.ModEditLaRL.Text = 'Sigma R';
+            
+            obj.ModEditLaR = uieditfield(obj.tabMod, 'text');
+            obj.ModEditLaR.Position = [75+180 10 100 20];
+            
+            % Mod tab - Fokus
+            obj.ModButZoo = uibutton(obj.tabMod, 'push');
+            obj.ModButZoo.Position = [20+360 90 150 20];
+            obj.ModButZoo.Text = 'Peak fokussieren';
+            
+            % Mod tab - Reset View
+            obj.ModButReset = uibutton(obj.tabMod, 'push');
+            obj.ModButReset.Position = [20+360 50 150 20];
+            obj.ModButReset.Text = 'Ansicht zuruecksetzen';
+            
+            % Mod tab - show only non modelled signal (sig-mod)
+            obj.ModButSing = uibutton(obj.tabMod, 'state');
+            obj.ModButSing.Position = [20+360 10 150 20];
+            obj.ModButSing.Text = 'Restpeaks ausblenden';
+            
+            %% 2nd layer elements - Save/Export tab
+            % Save tab - Save
+            obj.SavButSav = uibutton(obj.tabSav, 'push');
+            obj.SavButSav.Position = [20 90 100 20];
+            obj.SavButSav.Text = 'Save mat';
+            obj.SavButSav.ButtonPushedFcn={@(hobj,evnt) obj.saveMat(hobj,evnt)};
+            
+            % Export tab - Save
+            obj.SavButExp = uibutton(obj.tabSav, 'push');
+            obj.SavButExp.Position = [20 50 100 20];
+            obj.SavButExp.Text = 'Export csv';
+            obj.SavButExp.ButtonPushedFcn={@(hobj,evnt) obj.exportCsv(hobj,evnt)};
+            
+            % Save/Export tab - Save
+            obj.SavButSaE = uibutton(obj.tabSav, 'push');
+            obj.SavButSaE.Position = [20 10 100 20];
+            obj.SavButSaE.Text = 'Save & Export';
+            obj.SavButSaE.ButtonPushedFcn={@(hobj,evnt) obj.save_exp(hobj,evnt)};
+            
+            %% 2nd layer elements - Remove tab
+            % Mod tab - Idx label
+            obj.RemLabIdx = uilabel(obj.tabRem);
+            obj.RemLabIdx.HorizontalAlignment = 'right';
+            obj.RemLabIdx.Position = [20 90 50 20];
+            obj.RemLabIdx.Text = 'Index :';
+            
+            obj.RemLabIdx2 = uilabel(obj.tabRem);
+            obj.RemLabIdx2.HorizontalAlignment = 'left';
+            obj.RemLabIdx2.Position = [80 90 70 20];
+            obj.RemLabIdx2.Text = '';
+            
+            % Mod tab - Pos label
+            obj.RemLabPos = uilabel(obj.tabRem);
+            obj.RemLabPos.HorizontalAlignment = 'right';
+            obj.RemLabPos.Position = [20 50 50 20];
+            obj.RemLabPos.Text = 'Position :';
+            
+            obj.RemLabPos2 = uilabel(obj.tabRem);
+            obj.RemLabPos2.HorizontalAlignment = 'left';
+            obj.RemLabPos2.Position = [80 50 70 20];
+            obj.RemLabPos2.Text = '';
+            
+            % Mod tab - Int label
+            obj.RemLabInt = uilabel(obj.tabRem);
+            obj.RemLabInt.HorizontalAlignment = 'right';
+            obj.RemLabInt.Position = [20 10 50 20];
+            obj.RemLabInt.Text = 'Integral :';
+            
+            obj.RemLabInt2 = uilabel(obj.tabRem);
+            obj.RemLabInt2.HorizontalAlignment = 'left';
+            obj.RemLabInt2.Position = [80 10 70 20];
+            obj.RemLabInt2.Text = '';
+            
+            % Mod tab - Fokus
+            obj.RemButZoo = uibutton(obj.tabRem, 'push');
+            obj.RemButZoo.Position = [20+180 90 150 20];
+            obj.RemButZoo.Text = 'Peak fokussieren';
+            
+            % Mod tab - Reset View
+            obj.RemButReset = uibutton(obj.tabRem, 'push');
+            obj.RemButReset.Position = [20+180 50 150 20];
+            obj.RemButReset.Text = 'Ansicht zuruecksetzen';
+            
+            % Mod tab - Remove
+            obj.RemButDel = uibutton(obj.tabRem, 'push');
+            obj.RemButDel.Position = [20+180 10 150 20];
+            obj.RemButDel.Text = 'Peak loeschen';
+            obj.RemButDel.ButtonPushedFcn={@(hobj,evnt) obj.deleteSelPeak(hobj,evnt)};
+            
+            
+            %  Show the figure after all components are created
+            obj.mainfig.Visible = 'on';
+        end
+        
+        %% Code that executes after component creation
+        function startupFcn(obj)
+            obj.hSpec=[];
+            obj.hMod=[];
+            obj.hPeak=[];
+            
+            obj.updateTable;
+            obj.updatePlot;
+            drawnow limitrate nocallbacks
+        end
+        
+        
+        
+        %% update graphical elements
+        function updatePlot(obj)
+            cc =[0    0.4470    0.7410
+                0.8500    0.3250    0.0980
+                0.9290    0.6940    0.1250
+                0.4940    0.1840    0.5560
+                0.4660    0.6740    0.1880
+                0.3010    0.7450    0.9330
+                0.6350    0.0780    0.1840];
+            
+            
+            obj.hSpec=plot(obj.ga.profPF,'k',1,obj.mainaxes);
+            hold(obj.mainaxes,'on');
+            obj.hMod=plot(obj.ga.modePF,'b',1,obj.mainaxes);
+            axis(obj.mainaxes,'tight')
+            yy=ylim(obj.mainaxes);
+            ylim(obj.mainaxes,[min(yy(2),0) yy(2)])
+            
+            obj.hPeak=zeros(length(obj.ga.peaks),1);
+            id=1;
+            for i=1:length(obj.ga.peaks)
+                obj.hPeak(i)=plot(obj.ga.peaks(i),cc(id,:),2,obj.mainaxes);
+                id=id+1;
+                if id==8
+                    id=1;
+                end
+            end
+
+%             set([obj.mainaxes;allchild(obj.mainaxes)],'ButtonDownFcn',{@buttonTargetDown,obj});
+             set([obj.mainfig],'WindowButtonDownFcn',{@winBtnDown,obj});
+        end
+        
+        
+        
+        %% update graphical elements
+        function updateTable(obj)
+            t=table('Size',[length(obj.ga.peaks) 5],...
+                'VariableTypes',{'double','double','double','double','double'},...
+                'VariableNames',{'Index','Position','Integral','Overlap','Fit'});
+            tIndex=[];
+            tPosition=[];
+            tIntegral=[];
+            tOverlap=[];
+            tFit=[];
+            for i=1:length(obj.ga.peaks)
+                tIndex(end+1)=i;
+                tPosition(end+1)=obj.ga.peaks(i).peakstruct.maxlocation;
+                tIntegral(end+1)=obj.ga.peaks(i).peakstruct.int;
+                tOverlap(end+1)=obj.ga.peaks(i).overlap;
+                tFit(end+1)=obj.ga.peaks(i).fit;
+            end
+            
+            t.Index=tIndex(:);
+            t.Position=tPosition(:);
+            t.Integral=tIntegral(:);
+            t.Overlap=tOverlap(:);
+            t.Fit=tFit(:);
+            
+            obj.peaktable.Data=t;
+            
+        end
+    end
+    
+    methods (Access = private)
+        function obj = saveMat(obj,hObj,evnt)
+            [fname,fpath] = uiputfile('*.mat','Select file');
+            if max(fname)>0
+                ga=obj.ga;
+                save([fpath fname],'ga');
+            end
+        end
+        
+        function obj = exportCsv(obj,hObj,evnt)
+            [fname,fpath] = uiputfile('*.csv','Select file');
+            if max(fname)>0
+                obj.ga.writePeaks([fpath fname]);
+            end
+        end
+        
+        function obj = save_exp(obj,hObj,evnt)
+            [fname,fpath] = uiputfile('*.mat;*.csv','Select file');
+            if max(fname)>0
+                if strcmpi(fname(end-3:end),'.csv')
+                    fname=fname(end-2:end);
+                end
+                if strcmpi(fname(end-3:end),'.mat')
+                    fname=fname(end-2:end);
+                end
+                ga=obj.ga;
+                save([fpath fname '.mat'],'ga');
+                
+                obj.ga.writePeaks([fpath fname '.csv']);
+            end
+        end
+        
+        function obj = deleteSelPeak(obj,hObj,evnt)
+            mod=obj.ga.peaks(obj.currentSel).getmod(obj.ga.modePF.timegrid);
+            obj.ga.modePF.signal=obj.ga.modePF.signal-mod;
+            
+            %delete peak plot
+            obj.ga.peaks(obj.currentSel)=[];
+            delete(obj.hPeak(obj.currentSel));
+            obj.hPeak(obj.currentSel)=[];
+            
+            %update model
+            delete(obj.hMod);
+            obj.hMod=plot(obj.ga.modePF,'b',1,obj.mainaxes);
+            
+            %update eval
+            obj.evalOver(obj.currentSel)=[];
+            
+            %update table
+            obj.updateTable
+            obj.currentSel=min(obj.currentSel,length(obj.hPeak));
+            ev.Indices=[obj.currentSel 1];
+            cb_table([],ev,obj)
+        end
+    end
+    
+    %% App creation and deletion
+    methods (Access = public)
+        
+        %% Construct app
+        function obj = RESanalysis(ga)
+            warning off
+            addpath('class')
+            addpath('bin')
+            addpath('bin_gui')
+            addpath('bin_gui/@jcontrol/')
+            warning on
+            disp(['GCA result analyzer - Version ' obj.ver])
+            
+            % Create UIFigure and components
+            obj.createComponents;
+            % assign GCanalysis object
+            obj.ga=ga;
+%             obj.ga.rawP.timegrid=obj.ga.rawP.timegrid(1:100:end);
+%             obj.ga.rawP.signal=obj.ga.rawP.signal(1:100:end);
+% 
+%             obj.ga.profPF.timegrid=obj.ga.profPF.timegrid(1:100:end);
+%             obj.ga.profPF.signal=obj.ga.profPF.signal(1:100:end);
+% 
+%             obj.ga.modePF.timegrid=obj.ga.modePF.timegrid(1:100:end);
+%             obj.ga.modePF.signal=obj.ga.modePF.signal(1:100:end);
+%             obj.ga.peaks(20:end)=[];
+            
+            obj.startupFcn
+            
+        end
+        
+        %% Code that executes before app deletion
+        function delete(obj)
+            
+            % Delete UIFigure when app is deleted
+            delete(obj.mainfig)
+        end
+    end
+end

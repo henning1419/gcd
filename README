@@ -1,0 +1,21 @@
+## Install 
+
+- ensure `iconv` is installed for unix systems. This is used for encoding 
+  conversion of windows supplied csv files to utf-8 
+
+## Usage
+
+For each new Matlab startup:
+- navigate to the folder containing this README file, such that the 
+  navigation bar contains the correct path. Check by typing `cd` in the 
+  command window
+- select `setup.m` and run with F9 to add all relevant paths to the matlab 
+  search path
+
+## Examples
+
+- Verify that the folder 'example_data' contains just the csv and 
+  optionally a results folder
+- Select `start_computation.m` and run with F9
+- Optionally select and run `start_result_viewer.m` to view results.
+  Choose the mat file in the generated lastCalc folder, if asked.
